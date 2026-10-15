@@ -1,0 +1,10 @@
+{
+  "name": "wardworkfast",
+  "short_name": "wardworkfast",
+  "description": "Ward round board for the whole team",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#eef3f4",
+  "theme_color": "#0b6e74",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

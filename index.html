@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>wardworkfast</title>
+<meta name="description" content="บอร์ดราวน์วอร์ดที่ทีมแก้ไขร่วมกัน: เตียง Dx vital signs lab active problems ward work D/C และ consult">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0b6e74">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="wardworkfast">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@600;700&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+<style>
+/* Layout: sticky ward header + one row per bed, read left→right like a paper round sheet (bed · patient/Dx · problems · ward work · D/C · consult); rows fold into cards on phones. */
+:root {
+  --bg: #eef3f4; --surface: #ffffff; --surface-2: #f6f9f9; --ink: #10232b; --muted: #5a6e76; --line: #d6e0e3;
+  --accent: #0b6e74; --accent-ink: #ffffff; --accent-soft: #d9eeee;
+  --ok: #1d7446; --ok-soft: #ddf1e5; --warn: #8f5a00; --warn-soft: #faedd2;
+  --crit: #b3261e; --crit-soft: #fbe1de; --info: #2b5797; --info-soft: #e0e9f6; --done: #66767c; --done-soft: #e6ebed;
+  --f-display: "Bai Jamjuree", "IBM Plex Sans Thai", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans Thai", "Noto Sans Thai", "Leelawadee UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0c1518; --surface: #121f24; --surface-2: #0f1a1e; --ink: #e2ecee; --muted: #92a6ad; --line: #24363c;
+  --accent: #52bcc2; --accent-ink: #052023; --accent-soft: #133237;
+  --ok: #72cf98; --ok-soft: #142f1f; --warn: #e9b252; --warn-soft: #33270e; --crit: #f28b81; --crit-soft: #3b1714;
+  --info: #92b4ee; --info-soft: #172640; --done: #9aa9ae; --done-soft: #1d292d; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0c1518; --surface: #121f24; --surface-2: #0f1a1e; --ink: #e2ecee; --muted: #92a6ad; --line: #24363c;
+  --accent: #52bcc2; --accent-ink: #052023; --accent-soft: #133237;
+  --ok: #72cf98; --ok-soft: #142f1f; --warn: #e9b252; --warn-soft: #33270e; --crit: #f28b81; --crit-soft: #3b1714;
+  --info: #92b4ee; --info-soft: #172640; --done: #9aa9ae; --done-soft: #1d292d; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.5; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 1440px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* header */
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+header.top .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding-block: 12px; }
+.brand { display: flex; flex-direction: column; min-width: 0; flex: 1 1 260px; }
+.eyebrow { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+#ward-name { font-family: var(--f-display); font-weight: 700; font-size: 22px; line-height: 1.2; border: 0; background: transparent; padding: 0; width: 100%; min-width: 0; border-bottom: 1px dashed transparent; }
+#ward-name::placeholder { color: var(--muted); font-weight: 600; }
+#ward-name:hover:not([readonly]), #ward-name:focus { border-bottom-color: var(--line); outline: none; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { border: 1px solid var(--line); background: var(--surface); padding: 7px 12px; border-radius: 8px; cursor: pointer; font-weight: 500; white-space: nowrap; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.danger { color: var(--crit); border-color: var(--crit); background: var(--crit-soft); }
+.btn.ghost { background: transparent; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.sync { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.sync::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--done); }
+.sync.on::before { background: var(--ok); } .sync.local::before { background: var(--warn); } .sync.ro::before { background: var(--info); }
+
+/* summary strip */
+.strip { display: flex; flex-wrap: wrap; gap: 8px 22px; padding-block: 14px 6px; align-items: baseline; }
+.stat { display: flex; align-items: baseline; gap: 6px; color: var(--muted); }
+.stat b { font-family: var(--f-mono); font-size: 20px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.stat.warn b { color: var(--warn); } .stat.ok b { color: var(--ok); } .stat.crit b { color: var(--crit); }
+.privacy { font-size: 12px; color: var(--muted); padding-block: 0 8px; }
+
+/* toolbar */
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding-block: 8px 12px; }
+.tabs { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.tabs button { border: 0; background: transparent; padding: 6px 14px; border-radius: 7px; cursor: pointer; font-weight: 500; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--ink); }
+#q { flex: 1 1 200px; min-width: 0; max-width: 340px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.fchip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.fchip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 10px; margin-bottom: 12px; }
+.confirm p { margin: 0; flex: 1 1 260px; }
+
+/* board */
+.grid-cols { display: grid; grid-template-columns: 70px minmax(140px, 1fr) minmax(150px, 1fr) minmax(160px, 1.1fr) minmax(180px, 1.3fr) 150px minmax(130px, .9fr) 60px; gap: 0 14px; }
+.colhead { padding: 0 12px 6px 16px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.board { display: flex; flex-direction: column; gap: 8px; padding-bottom: 40px; }
+.pt { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 12px 12px 16px; position: relative; align-items: start; }
+.pt::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 0 3px 3px 0; background: var(--tone); }
+.pt > div { min-width: 0; }
+.tone-crit { --tone: var(--crit); --tone-soft: var(--crit-soft); } .tone-warn { --tone: var(--warn); --tone-soft: var(--warn-soft); }
+.tone-ok { --tone: var(--ok); --tone-soft: var(--ok-soft); } .tone-info { --tone: var(--info); --tone-soft: var(--info-soft); }
+.tone-done { --tone: var(--done); --tone-soft: var(--done-soft); }
+.pt.tone-done { opacity: .72; }
+.bed { font-family: var(--f-mono); font-weight: 600; font-size: 24px; line-height: 1.1; display: block; overflow-wrap: anywhere; }
+.ex { display: inline-block; margin-top: 4px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--warn); border: 1px dashed var(--warn); border-radius: 4px; padding: 0 4px; }
+.pt-name { font-weight: 600; }
+.meta { color: var(--muted); font-size: 12px; }
+.dx { margin-top: 2px; font-weight: 500; color: var(--accent); overflow-wrap: anywhere; }
+.lbl { display: none; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.lbl b { font-family: var(--f-mono); color: var(--ink); }
+ol.prob { margin: 0; padding: 0; list-style: none; counter-reset: p; }
+ol.prob li { counter-increment: p; display: flex; gap: 6px; overflow-wrap: anywhere; }
+ol.prob li::before { content: "#" counter(p); font-family: var(--f-mono); font-size: 12px; color: var(--muted); padding-top: 1px; flex: none; }
+ul.ww { margin: 0 0 4px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+ul.ww label { display: flex; gap: 7px; align-items: flex-start; cursor: pointer; overflow-wrap: anywhere; }
+ul.ww input { margin-top: 4px; accent-color: var(--accent); flex: none; }
+ul.ww input:checked + span { text-decoration: line-through; color: var(--muted); }
+.ww-add { width: 100%; border: 1px dashed var(--line); background: transparent; border-radius: 6px; padding: 3px 8px; font-size: 13px; }
+.ww-add:focus { border-style: solid; border-color: var(--accent); outline: none; }
+.dcsel { width: 100%; border: 1px solid var(--tone); background: var(--tone-soft); color: var(--ink); border-radius: 8px; padding: 5px 6px; font-weight: 500; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 1px 8px; font-size: 12px; background: var(--tone-soft); color: var(--tone); border: 1px solid transparent; font-weight: 500; }
+.chip .d { color: var(--ink); font-weight: 600; }
+.stat-chip { font-family: var(--f-mono); font-size: 10px; letter-spacing: .04em; background: var(--crit); color: var(--surface); border-radius: 4px; padding: 0 4px; }
+.c-ed { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.upd { font-size: 11px; color: var(--muted); text-align: right; overflow-wrap: anywhere; }
+.empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 28px 22px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; max-width: 640px; }
+.empty h2 { font-family: var(--f-display); margin: 0; font-size: 20px; text-wrap: balance; }
+.empty p { margin: 0; color: var(--muted); max-width: 60ch; }
+
+/* consult panel */
+.cpanel { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; padding-bottom: 40px; }
+.dept { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; min-width: 0; }
+.dept h3 { margin: 0; padding: 10px 14px; font-family: var(--f-display); font-size: 16px; display: flex; justify-content: space-between; align-items: baseline; background: var(--surface-2); border-bottom: 1px solid var(--line); }
+.dept h3 span { font-family: var(--f-mono); font-size: 12px; color: var(--muted); font-weight: 500; }
+.citem { display: grid; grid-template-columns: 52px 1fr; gap: 4px 10px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.citem:first-of-type { border-top: 0; }
+.citem .bed { font-size: 17px; }
+.citem select { border: 1px solid var(--tone); background: var(--tone-soft); border-radius: 6px; padding: 2px 4px; font-size: 12px; }
+.crow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+/* dialog */
+dialog { border: 1px solid var(--line); border-radius: 14px; padding: 0; background: var(--surface); color: var(--ink); width: min(760px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); }
+dialog::backdrop { background: rgb(5 15 18 / .5); }
+.dlg { display: flex; flex-direction: column; max-height: calc(100dvh - 26px); }
+.dlg-h { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.dlg-h h2 { margin: 0; font-family: var(--f-display); font-size: 18px; }
+.dlg-b { padding: 16px 18px; overflow-y: auto; display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.dlg-f { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.dlg-f .r { display: flex; gap: 8px; margin-left: auto; }
+.fld { display: flex; flex-direction: column; gap: 3px; grid-column: span 6; min-width: 0; }
+.fld.s1 { grid-column: span 1; } .fld.s2 { grid-column: span 2; } .fld.s3 { grid-column: span 3; }
+.fld label, .fld .lab { font-size: 12px; color: var(--muted); font-weight: 500; }
+.fld input, .fld select, .fld textarea, .csr input, .csr select { border: 1px solid var(--line); background: var(--surface-2); border-radius: 7px; padding: 6px 9px; width: 100%; min-width: 0; }
+.fld textarea { resize: vertical; min-height: 78px; line-height: 1.5; }
+.hint { font-size: 11px; color: var(--muted); }
+.csr { display: grid; grid-template-columns: 1.1fr 1.6fr 1.1fr auto auto; gap: 6px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; }
+.csr .note { grid-column: 1 / -1; }
+.csr .urg { display: flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
+.x { border: 0; background: transparent; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 2px 6px; }
+#sum-text { width: 100%; min-height: 50vh; font-family: var(--f-mono); font-size: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); padding: 10px; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 20; max-width: calc(100vw - 32px); }
+
+@media (max-width: 1240px) {
+  .colhead { display: none; }
+  .grid-cols { grid-template-columns: 64px 1fr 1fr; gap: 10px 14px; }
+  .pt .c-pt { grid-column: 2 / 3; } .pt .c-ed { grid-column: 3; grid-row: 1; }
+  .pt .c-vl { grid-column: 2 / -1; } .pt .c-prob, .pt .c-ww { grid-column: 2 / -1; }
+  .pt .c-dc { grid-column: 2 / 3; } .pt .c-cs { grid-column: 3 / -1; }
+  .pt .c-bed { grid-row: 1 / span 5; }
+  .lbl { display: block; }
+}
+@media (max-width: 560px) {
+  .grid-cols { grid-template-columns: 1fr auto; }
+  .pt .c-bed { grid-row: auto; grid-column: 1; display: flex; gap: 8px; align-items: baseline; }
+  .pt .c-ed { grid-column: 2; grid-row: 1; flex-direction: row; align-items: center; }
+  .pt .c-pt, .pt .c-vl, .pt .c-prob, .pt .c-ww, .pt .c-dc, .pt .c-cs { grid-column: 1 / -1; }
+  .upd { display: none; }
+  .fld.s1, .fld.s2, .fld.s3 { grid-column: span 3; }
+  .csr { grid-template-columns: 1fr 1fr; }
+  .csr .reason { grid-column: 1 / -1; }
+  #ward-name { font-size: 19px; }
+}
+@media (prefers-reduced-motion: no-preference) { .pt { transition: border-color .15s; } .pt:hover { border-color: var(--accent); } }
+
+/* wardworkfast additions */
+html, body { min-height: 100%; }
+body { margin: 0; padding-top: env(safe-area-inset-top, 0px); }
+.wordmark { font-family: var(--f-display); font-weight: 700; letter-spacing: -.01em; }
+.wordmark i { font-style: normal; color: var(--accent); }
+.who { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.who input { width: 120px; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 3px 7px; font-size: 12px; }
+.who input:placeholder-shown { border-color: var(--warn); background: var(--warn-soft); }
+.vit { display: flex; flex-wrap: wrap; gap: 1px 10px; font-family: var(--f-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.vit span { white-space: nowrap; }
+.vit small { font-family: var(--f-body); color: var(--muted); font-size: 11px; margin-right: 2px; }
+.vit .ab { color: var(--crit); font-weight: 600; }
+.vtime { font-size: 11px; color: var(--muted); }
+.labs { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
+.labchip { font-family: var(--f-mono); font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; overflow-wrap: anywhere; }
+.labchip.ab { color: var(--crit); border-color: var(--crit); background: var(--crit-soft); font-weight: 600; }
+.vgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; grid-column: span 6; }
+.vgrid .fld { grid-column: auto; }
+.landing { max-width: 760px; padding-block: 56px 40px; display: flex; flex-direction: column; gap: 22px; }
+.landing h1 { font-size: clamp(40px, 9vw, 64px); line-height: 1; margin: 0; }
+.landing .lede { font-size: 16px; color: var(--muted); max-width: 58ch; margin: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.card h2 { margin: 0; font-family: var(--f-display); font-size: 18px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.row input { flex: 1 1 220px; min-width: 0; border: 1px solid var(--line); background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+.recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.recent a { color: var(--accent); font-weight: 500; text-decoration: none; }
+.recent a:hover { text-decoration: underline; }
+.feat { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 6px 18px; margin: 0; padding: 0; list-style: none; color: var(--muted); }
+.feat b { color: var(--ink); font-weight: 600; }
+.share-url { font-family: var(--f-mono); font-size: 12px; word-break: break-all; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; user-select: all; }
+#qr { background: #ffffff; padding: 10px; border-radius: 8px; width: max-content; max-width: 100%; }
+#qr img, #qr canvas { display: block; max-width: 100%; height: auto; }
+.home { text-decoration: none; color: inherit; }
+@media (max-width: 560px) { .vgrid { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div id="landing" hidden>
+  <main class="wrap"><div class="landing">
+    <div>
+      <span class="eyebrow">Ward round board</span>
+      <h1 class="wordmark">wardwork<i>fast</i></h1>
+    </div>
+    <p class="lede">บอร์ดราวน์วอร์ดที่ทั้งทีมเปิดดูและแก้ไขได้พร้อมกัน มีตารางตามเลขเตียง Dx, vital signs, lab สำคัญ, active problems, ward work, สถานะ D/C และ consult panel</p>
+    <section class="card">
+      <h2>สร้างบอร์ดใหม่สำหรับวอร์ดของคุณ</h2>
+      <form class="row" id="create-form">
+        <input id="new-ward" placeholder="ชื่อวอร์ด เช่น อายุรกรรมชาย 1" maxlength="80" aria-label="ชื่อวอร์ด">
+        <button class="btn primary" type="submit" id="create-btn">สร้างบอร์ด</button>
+      </form>
+      <p class="hint">ระบบจะสร้างลิงก์ลับของบอร์ดนี้ ใครมีลิงก์ก็ดูและแก้ไขได้ ส่งลิงก์ให้เฉพาะคนในทีม</p>
+    </section>
+    <section class="card">
+      <h2>เปิดบอร์ดที่มีอยู่</h2>
+      <form class="row" id="open-form">
+        <input id="open-link" placeholder="วางลิงก์บอร์ดที่ได้จากทีม" aria-label="ลิงก์บอร์ด">
+        <button class="btn" type="submit">เปิด</button>
+      </form>
+      <ul class="recent" id="recent"></ul>
+    </section>
+    <ul class="feat">
+      <li><b>Ward work</b> ติ๊กเสร็จได้ทันทีระหว่างราวน์</li>
+      <li><b>Vitals & Lab</b> ค่าผิดปกติขึ้นสีแดง</li>
+      <li><b>Consult panel</b> รวมทุกเตียงแยกตามแผนก</li>
+      <li><b>สรุปส่งเวร</b> คัดลอกไปวางใน LINE ได้</li>
+    </ul>
+  </div></main>
+</div>
+
+<div id="app" hidden>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <span class="eyebrow"><a class="home wordmark" href="./">wardwork<i>fast</i></a> · <span id="today"></span></span>
+      <input id="ward-name" value="" placeholder="ตั้งชื่อวอร์ด" aria-label="ชื่อหอผู้ป่วย" maxlength="80">
+    </div>
+    <label class="who" for="me-name">ผู้แก้ไข <input id="me-name" placeholder="ใส่ชื่อคุณ" maxlength="40"></label>
+    <span class="sync" id="sync">กำลังเชื่อมต่อ…</span>
+    <div class="actions">
+      <button class="btn primary" id="btn-add">+ เพิ่มผู้ป่วย</button>
+      <button class="btn" id="btn-share">แชร์ลิงก์ทีม</button>
+      <button class="btn" id="btn-sum">สรุปส่งเวร / LINE</button>
+      <button class="btn ghost" id="btn-new">เริ่มราวน์วันใหม่</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="strip" id="strip"></div>
+  <p class="privacy">ทุกคนที่มีลิงก์บอร์ดนี้ดูและแก้ไขได้ ใช้เลขเตียงและชื่อย่อ (เช่น นาย ก.) ห้ามใส่ชื่อเต็ม HN หรือเลขบัตรประชาชน</p>
+  <div id="confirm-slot"></div>
+  <div class="toolbar">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-pts" aria-selected="true">ผู้ป่วย</button>
+      <button role="tab" id="tab-cs" aria-selected="false">Consult panel</button>
+    </div>
+    <input id="q" type="search" placeholder="ค้นหาเตียง ชื่อย่อ Dx…" aria-label="ค้นหา">
+    <div class="filters" id="filters"></div>
+  </div>
+  <section id="view"></section>
+</main>
+</div>
+
+<dialog id="dlg"><form class="dlg" id="pform" method="dialog"></form></dialog>
+<dialog id="sdlg">
+  <div class="dlg">
+    <div class="dlg-h"><h2>สรุปราวน์ (คัดลอกไปวางใน LINE / ส่งเวร)</h2><button class="x" id="sum-close" aria-label="ปิด">×</button></div>
+    <div style="padding:14px 18px"><textarea id="sum-text" readonly></textarea></div>
+    <div class="dlg-f"><span class="hint">ถ้าปุ่มคัดลอกใช้ไม่ได้ ให้กดค้างที่ข้อความแล้วเลือกคัดลอก</span><div class="r"><button class="btn primary" id="sum-copy">คัดลอก</button></div></div>
+  </div>
+</dialog>
+<dialog id="shdlg">
+  <div class="dlg">
+    <div class="dlg-h"><h2>แชร์บอร์ดให้ทีม</h2><button class="x" id="share-close" aria-label="ปิด">×</button></div>
+    <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+      <p style="margin:0">ส่งลิงก์นี้ให้คนในทีม ใครมีลิงก์ก็ดูและแก้ไขบอร์ดนี้ได้ทันที ไม่ต้องสมัครสมาชิก หรือให้สแกน QR จากจอนี้</p>
+      <div class="share-url" id="share-url"></div>
+      <div id="qr"></div>
+    </div>
+    <div class="dlg-f"><span class="hint">อย่าโพสต์ลิงก์ในกลุ่มที่มีคนนอกทีม</span><div class="r"><button class="btn primary" id="share-copy">คัดลอกลิงก์</button></div></div>
+  </div>
+</dialog>
+<datalist id="depts">
+  <option value="Med"><option value="Surgery"><option value="Ortho"><option value="Neuro"><option value="Neurosurg"><option value="Cardio">
+  <option value="Nephro"><option value="ID"><option value="GI"><option value="Chest"><option value="Endo"><option value="Hemato">
+  <option value="Onco"><option value="Psych"><option value="Rehab"><option value="ENT"><option value="Eye"><option value="OB-GYN">
+  <option value="Ped"><option value="Uro"><option value="CVT"><option value="Palliative"><option value="Nutrition"><option value="Social worker"><option value="Pharmacy">
+</datalist>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(() => {
+"use strict";
+const SB_URL = "https://gfnmmtcoxzlsgsqowbuv.supabase.co";
+const SB_KEY = "sb_publishable__STyAy6H06aPyuloZJmX8w_6nnDTKDC";
+const POLL_MS = 5000;
+
+const DC = {
+  watch:  { label: "Unstable / เฝ้าระวัง", short: "Unstable", tone: "crit" },
+  active: { label: "ยังไม่พร้อม D/C", short: "Not ready", tone: "info" },
+  plan:   { label: "วางแผน D/C", short: "Plan D/C", tone: "warn" },
+  ready:  { label: "พร้อม D/C วันนี้", short: "Ready", tone: "ok" },
+  done:   { label: "D/C แล้ว", short: "D/C'd", tone: "done" },
+};
+const CS = {
+  todo: { label: "ยังไม่ได้ส่ง", tone: "crit" },
+  sent: { label: "ส่งแล้ว รอดู", tone: "warn" },
+  seen: { label: "ดูแล้ว / F/U", tone: "info" },
+  off:  { label: "Sign off", tone: "done" },
+};
+/* vital sign fields, with a simple adult abnormal flag */
+const VS = [
+  { k: "t", lab: "T", unit: "°C", ab: (v) => v >= 37.8 || v < 36 },
+  { k: "bp", lab: "BP", unit: "", ab: (v) => { const m = String(v).match(/(\d+)\s*\/\s*(\d+)/); return m ? (+m[1] < 90 || +m[1] >= 180 || +m[2] >= 110) : false; } },
+  { k: "hr", lab: "HR", unit: "", ab: (v) => v > 100 || v < 50 },
+  { k: "rr", lab: "RR", unit: "", ab: (v) => v > 22 || v < 10 },
+  { k: "spo2", lab: "SpO₂", unit: "%", ab: (v) => v < 94 },
+  { k: "o2", lab: "O₂", unit: "", ab: () => false },
+  { k: "dtx", lab: "DTX", unit: "", ab: (v) => v < 70 || v > 250 },
+];
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const thDate = (d) => new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short" });
+const natural = (a, b) => String(a.bed || "").localeCompare(String(b.bed || ""), "th", { numeric: true });
+const ls = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+
+/* ---------- API ---------- */
+async function rpc(fn, args) {
+  const r = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: { apikey: SB_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  if (!r.ok) { let m = ""; try { m = (await r.json()).message || ""; } catch (e) {} throw new Error(m || "HTTP " + r.status); }
+  const t = await r.text();
+  return t ? JSON.parse(t) : null;
+}
+
+let boardKey = "";
+let patients = new Map(), wardName = "", pending = 0, pollT = null, lastOk = 0;
+const ui = { tab: "pts", q: "", dc: "all", csActive: true, confirm: false };
+const myName = () => ($("#me-name").value.trim() || "ไม่ระบุชื่อ");
+
+function keyFromHash() { const h = location.hash.replace(/^#/, ""); return /^[a-f0-9]{32}$/.test(h) ? h : ""; }
+function boardLink(k) { return location.origin + location.pathname + "#" + k; }
+function remember(k, name) {
+  const list = ls.get("wwf-boards", []).filter((b) => b.k !== k);
+  list.unshift({ k, name: name || "", at: Date.now() });
+  ls.set("wwf-boards", list.slice(0, 8));
+}
+
+/* ---------- routing ---------- */
+function route() {
+  boardKey = keyFromHash();
+  clearInterval(pollT);
+  if (!boardKey) { showLanding(); return; }
+  $("#landing").hidden = true; $("#app").hidden = false;
+  patients = new Map(); wardName = ""; $("#ward-name").value = "";
+  setSync("", "กำลังโหลด…");
+  render();
+  refresh(true);
+  pollT = setInterval(() => { if (document.visibilityState === "visible") refresh(); }, POLL_MS);
+}
+function showLanding() {
+  $("#app").hidden = true; $("#landing").hidden = false;
+  document.title = "wardworkfast";
+  const list = ls.get("wwf-boards", []);
+  $("#recent").innerHTML = list.length
+    ? `<li class="hint">บอร์ดที่เคยเปิดในเครื่องนี้</li>` + list.map((b) => `<li><a href="#${esc(b.k)}">${esc(b.name || "บอร์ดไม่มีชื่อ")}</a></li>`).join("")
+    : "";
+}
+window.addEventListener("hashchange", route);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && boardKey) refresh(); });
+
+$("#create-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("#new-ward").value.trim();
+  const b = $("#create-btn"); b.disabled = true; b.textContent = "กำลังสร้าง…";
+  try { const k = await rpc("ww_create_board", { p_name: name }); remember(k, name); location.hash = k; }
+  catch (err) { toast("สร้างบอร์ดไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่"); }
+  finally { b.disabled = false; b.textContent = "สร้างบอร์ด"; }
+});
+$("#open-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const m = $("#open-link").value.match(/[a-f0-9]{32}/);
+  if (!m) { toast("ลิงก์ไม่ถูกต้อง ให้วางลิงก์บอร์ดทั้งลิงก์"); return; }
+  location.hash = m[0];
+});
+
+/* ---------- sync ---------- */
+async function refresh(first) {
+  if (pending) return; // wait for our own writes to land first
+  try {
+    const b = await rpc("ww_get_board", { p_key: boardKey });
+    if (pending) return;
+    if (!b) { setSync("", "ไม่พบบอร์ดนี้"); $("#view").innerHTML = `<div class="empty"><h2>ไม่พบบอร์ดนี้</h2><p>ลิงก์อาจพิมพ์ผิดหรือไม่ครบ ขอลิงก์ใหม่จากทีม หรือ <a href="./">สร้างบอร์ดใหม่</a></p></div>`; clearInterval(pollT); return; }
+    patients = new Map(b.patients.map((r) => [r.id, { ...r.data, id: r.id, updatedAt: r.updated_at, updatedBy: r.updated_by }]));
+    if (document.activeElement !== $("#ward-name")) { wardName = b.name || ""; $("#ward-name").value = wardName; }
+    document.title = (wardName ? wardName + " · " : "") + "wardworkfast";
+    remember(boardKey, wardName);
+    lastOk = Date.now();
+    setSync("on", "ออนไลน์ · อัปเดตอัตโนมัติ");
+    render();
+  } catch (e) {
+    setSync("local", "ออฟไลน์ · กำลังลองใหม่");
+  }
+}
+function write(promise) {
+  pending++;
+  setSync("on", "กำลังบันทึก…");
+  return promise.then(
+    () => { pending--; if (!pending) refresh(); },
+    (e) => { pending--; toast("บันทึกไม่สำเร็จ: " + (e.message || "ลองอีกครั้ง")); refresh(); }
+  );
+}
+function putPatient(id, data) {
+  patients.set(id, { ...data, id, updatedAt: new Date().toISOString(), updatedBy: myName() }); render();
+  return write(rpc("ww_put_patient", { p_key: boardKey, p_id: id, p_data: data, p_by: myName() }));
+}
+function patchPatient(id, patch) {
+  const cur = patients.get(id); if (cur) { patients.set(id, { ...cur, ...patch, updatedAt: new Date().toISOString(), updatedBy: myName() }); render(); }
+  return write(rpc("ww_patch_patient", { p_key: boardKey, p_id: id, p_patch: patch, p_by: myName() }));
+}
+function removePatient(id) {
+  patients.delete(id); render();
+  return write(rpc("ww_delete_patient", { p_key: boardKey, p_id: id }));
+}
+function setSync(cls, text) { const el = $("#sync"); el.className = "sync " + cls; el.textContent = text; }
+let toastT;
+function toast(msg) { let t = $(".toast"); if (!t) { t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); } t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 3200); }
+
+/* ---------- render ---------- */
+function list() { return [...patients.values()].sort(natural); }
+function dayOf(admit) { if (!admit) return ""; const d = Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(admit + "T00:00").getTime()) / 864e5) + 1; return d > 0 ? "D" + d : ""; }
+function matches(p) {
+  if (ui.dc !== "all" && (p.dc || "active") !== ui.dc) return false;
+  if (!ui.q) return true;
+  const hay = [p.bed, p.name, p.dx, ...(p.problems || []), ...(p.labs || []), ...(p.consults || []).map((c) => c.dept)].join(" ").toLowerCase();
+  return hay.includes(ui.q.toLowerCase());
+}
+function vitalAbn(f, v) { const n = parseFloat(v); return f.k === "bp" ? f.ab(v) : (!isNaN(n) && f.ab(n)); }
+function vitalsHTML(p) {
+  const v = p.vitals || {};
+  const parts = VS.filter((f) => v[f.k]).map((f) => `<span class="${vitalAbn(f, v[f.k]) ? "ab" : ""}"><small>${f.lab}</small>${esc(v[f.k])}${f.unit}</span>`);
+  return parts.length ? `<div class="vit">${parts.join("")}</div>${v.time ? `<div class="vtime">เวลา ${esc(v.time)}</div>` : ""}` : "";
+}
+function labsHTML(p) {
+  const labs = p.labs || [];
+  if (!labs.length) return "";
+  return `<div class="labs">${labs.map((l) => { const ab = l.startsWith("!"); return `<span class="labchip ${ab ? "ab" : ""}">${esc(ab ? l.slice(1).trim() : l)}</span>`; }).join("")}</div>`;
+}
+function renderStrip() {
+  const ps = list().filter((p) => p.dc !== "done");
+  const ww = ps.reduce((n, p) => n + (p.wardwork || []).filter((w) => !w.done).length, 0);
+  const ready = ps.filter((p) => p.dc === "ready").length;
+  const watch = ps.filter((p) => p.dc === "watch").length;
+  const cs = ps.reduce((n, p) => n + (p.consults || []).filter((c) => c.status === "todo" || c.status === "sent").length, 0);
+  $("#strip").innerHTML =
+    `<span class="stat"><b>${ps.length}</b> ผู้ป่วยในวอร์ด</span>` +
+    `<span class="stat ${watch ? "crit" : ""}"><b>${watch}</b> Unstable</span>` +
+    `<span class="stat ${ww ? "warn" : ""}"><b>${ww}</b> ward work ค้าง</span>` +
+    `<span class="stat ${ready ? "ok" : ""}"><b>${ready}</b> พร้อม D/C</span>` +
+    `<span class="stat ${cs ? "warn" : ""}"><b>${cs}</b> consult รอ</span>`;
+}
+function renderFilters() {
+  const el = $("#filters");
+  if (ui.tab === "cs") { el.innerHTML = `<button class="fchip" data-csact="1" aria-pressed="${ui.csActive}">เฉพาะที่ยังไม่ sign off</button>`; return; }
+  const opts = [["all", "ทั้งหมด"], ...Object.entries(DC).map(([k, v]) => [k, v.short])];
+  el.innerHTML = opts.map(([k, l]) => `<button class="fchip" data-dcf="${k}" aria-pressed="${ui.dc === k}">${esc(l)}</button>`).join("");
+}
+function updatedLine(p) {
+  if (!p.updatedAt) return "";
+  const t = new Date(p.updatedAt);
+  const when = t.toDateString() === new Date().toDateString() ? t.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : thDate(t);
+  return `อัปเดต ${esc(when)}${p.updatedBy ? "<br>" + esc(p.updatedBy) : ""}`;
+}
+function rowHTML(p) {
+  const dcKey = DC[p.dc] ? p.dc : "active", dc = DC[dcKey];
+  const ww = p.wardwork || [], left = ww.filter((w) => !w.done).length;
+  const probs = (p.problems || []).length ? `<ol class="prob">${p.problems.map((x) => `<li><span>${esc(x)}</span></li>`).join("")}</ol>` : `<span class="meta">—</span>`;
+  const wwl = ww.map((w) => `<li><label><input type="checkbox" id="ww-${p.id}-${w.id}" data-act="ww" data-w="${w.id}" ${w.done ? "checked" : ""}><span>${esc(w.t)}</span></label></li>`).join("");
+  const cs = (p.consults || []).map((c) => { const s = CS[c.status] || CS.todo; return `<span class="chip tone-${s.tone}" title="${esc(c.reason || "")}"><span class="d">${esc(c.dept)}</span>${esc(s.label)}${c.urgent ? ' <span class="stat-chip">STAT</span>' : ""}</span>`; }).join("");
+  const age = [p.age ? p.age + " ปี" : "", p.sex || ""].filter(Boolean).join(" ");
+  const adm = p.admit ? `Adm ${thDate(p.admit + "T00:00")} · ${dayOf(p.admit)}` : "";
+  const dcMeta = [p.dcDate ? "คาด D/C " + thDate(p.dcDate + "T00:00") : "", p.dcNote || ""].filter(Boolean).map(esc).join(" · ");
+  const vl = vitalsHTML(p) + labsHTML(p);
+  return `<article class="pt grid-cols tone-${dc.tone}" data-id="${p.id}">
+    <div class="c-bed"><span class="bed">${esc(p.bed || "—")}</span>${p.example ? '<span class="ex">ตัวอย่าง</span>' : ""}</div>
+    <div class="c-pt"><div class="pt-name">${esc(p.name || "ไม่ระบุ")} <span class="meta">${esc(age)}</span></div><div class="dx">${esc(p.dx || "ยังไม่ใส่ Dx")}</div><div class="meta">${adm}</div></div>
+    <div class="c-vl"><span class="lbl">Vital signs / Lab</span>${vl || '<span class="meta">—</span>'}</div>
+    <div class="c-prob"><span class="lbl">Active problems</span>${probs}</div>
+    <div class="c-ww"><span class="lbl">Ward work <b>${left}</b>/${ww.length} ค้าง</span><ul class="ww">${wwl}</ul><input class="ww-add" id="add-${p.id}" data-act="ww-add" placeholder="+ เพิ่ม ward work แล้วกด Enter" aria-label="เพิ่ม ward work เตียง ${esc(p.bed)}"></div>
+    <div class="c-dc"><span class="lbl">Discharge</span><select class="dcsel" id="dc-${p.id}" data-act="dc" aria-label="สถานะ D/C เตียง ${esc(p.bed)}">${Object.entries(DC).map(([k, v]) => `<option value="${k}" ${k === dcKey ? "selected" : ""}>${esc(v.label)}</option>`).join("")}</select>${dcMeta ? `<div class="meta" style="margin-top:4px">${dcMeta}</div>` : ""}</div>
+    <div class="c-cs"><span class="lbl">Consult</span><div class="chips">${cs || '<span class="meta">—</span>'}</div></div>
+    <div class="c-ed"><button class="btn" data-act="edit" aria-label="แก้ไขเตียง ${esc(p.bed)}">แก้ไข</button><div class="upd">${updatedLine(p)}</div></div>
+  </article>`;
+}
+function emptyHTML() {
+  if (!lastOk) return `<div class="empty"><h2>กำลังโหลดบอร์ด…</h2><p>ถ้าค้างนาน ให้ตรวจอินเทอร์เน็ตแล้วรีเฟรชหน้า</p></div>`;
+  return `<div class="empty"><h2>ยังไม่มีผู้ป่วยในบอร์ดนี้</h2>
+    <p>กด “เพิ่มผู้ป่วย” แล้วใส่เลขเตียง Dx vital signs lab active problems ward work สถานะ D/C และ consult จากนั้นกด “แชร์ลิงก์ทีม” ส่งให้คนในทีม ทุกคนจะเห็นและแก้ไขได้พร้อมกัน</p>
+    <div class="actions"><button class="btn primary" data-act="first-add">+ เพิ่มผู้ป่วยคนแรก</button><button class="btn" data-act="examples">ลองด้วยข้อมูลตัวอย่าง 4 เตียง</button></div></div>`;
+}
+function renderPatients() {
+  if (!patients.size) return emptyHTML();
+  const ps = list().filter(matches);
+  const head = `<div class="grid-cols colhead"><span>เตียง</span><span>ผู้ป่วย / Diagnosis</span><span>Vitals / Lab</span><span>Active problems</span><span>Ward work</span><span>Discharge</span><span>Consult</span><span></span></div>`;
+  const exBar = list().some((p) => p.example) ? `<div class="confirm" style="border-color:var(--line);background:var(--surface)"><p>บอร์ดนี้มีข้อมูลตัวอย่าง (ป้าย “ตัวอย่าง”) ลบออกก่อนใช้งานจริง</p><button class="btn" data-act="clear-ex">ลบข้อมูลตัวอย่าง</button></div>` : "";
+  return exBar + head + `<div class="board">${ps.map(rowHTML).join("") || '<p class="meta">ไม่พบผู้ป่วยที่ตรงกับตัวกรอง</p>'}</div>`;
+}
+function renderConsults() {
+  const groups = new Map();
+  list().forEach((p) => (p.consults || []).forEach((c) => {
+    if (ui.csActive && c.status === "off") return;
+    if (ui.q && ![p.bed, p.name, c.dept, c.reason].join(" ").toLowerCase().includes(ui.q.toLowerCase())) return;
+    const k = (c.dept || "อื่นๆ").trim();
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push({ p, c });
+  }));
+  if (!groups.size) return `<div class="empty"><h2>${patients.size ? "ไม่มี consult ที่ค้างอยู่" : "ยังไม่มีผู้ป่วย"}</h2><p>เพิ่ม consult ได้ในหน้าแก้ไขผู้ป่วยแต่ละเตียง แล้วจะรวมมาแสดงตามแผนกที่นี่ ใช้ดูว่าต้องตามแผนกไหน เตียงไหนบ้าง</p></div>`;
+  const order = { todo: 0, sent: 1, seen: 2, off: 3 };
+  return `<div class="cpanel">${[...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([dept, items]) => {
+    items.sort((a, b) => (b.c.urgent ? 1 : 0) - (a.c.urgent ? 1 : 0) || order[a.c.status] - order[b.c.status] || natural(a.p, b.p));
+    return `<section class="dept"><h3>${esc(dept)}<span>${items.length} ราย</span></h3>${items.map(({ p, c }) => {
+      const s = CS[c.status] || CS.todo;
+      return `<div class="citem tone-${s.tone}" data-id="${p.id}" data-c="${esc(c.id)}"><span class="bed">${esc(p.bed)}</span>
+        <div style="min-width:0"><div class="crow"><b>${esc(p.name || "")}</b>${c.urgent ? '<span class="stat-chip">STAT</span>' : ""}
+        <select id="cs-${p.id}-${esc(c.id)}" data-act="cs" aria-label="สถานะ consult">${Object.entries(CS).map(([k, v]) => `<option value="${k}" ${k === c.status ? "selected" : ""}>${esc(v.label)}</option>`).join("")}</select></div>
+        <div>${esc(c.reason || "")}</div>${c.note ? `<div class="meta">${esc(c.note)}</div>` : ""}</div></div>`;
+    }).join("")}</section>`;
+  }).join("")}</div>`;
+}
+function renderConfirm() {
+  $("#confirm-slot").innerHTML = ui.confirm ? `<div class="confirm"><p>เริ่มราวน์วันใหม่: ลบ ward work ที่ติ๊กเสร็จแล้ว และนำผู้ป่วยที่สถานะ “D/C แล้ว” ออกจากบอร์ด งานที่ยังค้างจะยังอยู่</p><button class="btn danger" data-act="newround-yes">ยืนยัน</button><button class="btn" data-act="newround-no">ยกเลิก</button></div>` : "";
+}
+function render() {
+  const ae = document.activeElement, aid = ae && ae.id, aval = ae && ae.value, sel = ae && ae.selectionStart;
+  renderStrip(); renderFilters(); renderConfirm();
+  $("#tab-pts").setAttribute("aria-selected", ui.tab === "pts");
+  $("#tab-cs").setAttribute("aria-selected", ui.tab === "cs");
+  $("#view").innerHTML = ui.tab === "pts" ? renderPatients() : renderConsults();
+  if (aid && aid.startsWith("add-")) { const el = document.getElementById(aid); if (el) { el.value = aval; el.focus(); try { el.setSelectionRange(sel, sel); } catch (e) {} } }
+}
+
+/* ---------- events ---------- */
+const view = $("#view");
+view.addEventListener("change", (e) => {
+  const t = e.target, row = t.closest("[data-id]"); if (!row) return;
+  const p = patients.get(row.dataset.id); if (!p) return;
+  if (t.dataset.act === "ww") patchPatient(p.id, { wardwork: clone(p.wardwork || []).map((w) => (w.id === t.dataset.w ? { ...w, done: t.checked } : w)) });
+  else if (t.dataset.act === "dc") patchPatient(p.id, { dc: t.value });
+  else if (t.dataset.act === "cs") patchPatient(p.id, { consults: clone(p.consults || []).map((c) => (c.id === row.dataset.c ? { ...c, status: t.value } : c)) });
+});
+view.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (t.dataset.act !== "ww-add" || e.key !== "Enter" || e.isComposing) return;
+  e.preventDefault();
+  const txt = t.value.trim(); if (!txt) return;
+  const p = patients.get(t.closest("[data-id]").dataset.id); if (!p) return;
+  t.value = "";
+  patchPatient(p.id, { wardwork: [...clone(p.wardwork || []), { id: uid(), t: txt, done: false }] });
+});
+view.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const act = b.dataset.act;
+  if (act === "edit") openEditor(patients.get(b.closest("[data-id]").dataset.id));
+  else if (act === "first-add") openEditor(null);
+  else if (act === "examples") addExamples();
+  else if (act === "clear-ex") list().filter((p) => p.example).forEach((p) => removePatient(p.id));
+});
+$("#confirm-slot").addEventListener("click", (e) => {
+  const act = e.target.dataset.act;
+  if (act === "newround-no") { ui.confirm = false; renderConfirm(); }
+  if (act === "newround-yes") {
+    ui.confirm = false;
+    list().forEach((p) => {
+      if (p.dc === "done") removePatient(p.id);
+      else if ((p.wardwork || []).some((w) => w.done)) patchPatient(p.id, { wardwork: p.wardwork.filter((w) => !w.done) });
+    });
+    render(); toast("เริ่มราวน์วันใหม่แล้ว");
+  }
+});
+$("#filters").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.dcf) ui.dc = b.dataset.dcf;
+  if (b.dataset.csact) ui.csActive = !ui.csActive;
+  render();
+});
+$("#tab-pts").onclick = () => { ui.tab = "pts"; render(); };
+$("#tab-cs").onclick = () => { ui.tab = "cs"; render(); };
+$("#q").addEventListener("input", (e) => { ui.q = e.target.value.trim(); render(); });
+$("#btn-add").onclick = () => openEditor(null);
+$("#btn-new").onclick = () => { ui.confirm = true; renderConfirm(); };
+$("#ward-name").addEventListener("change", (e) => {
+  const v = e.target.value.trim(); wardName = v;
+  write(rpc("ww_rename_board", { p_key: boardKey, p_name: v }));
+});
+$("#me-name").value = ls.get("wwf-name", "");
+$("#me-name").addEventListener("change", (e) => ls.set("wwf-name", e.target.value.trim()));
+
+function copyText(text, fallbackEl) {
+  const fb = () => { if (fallbackEl) { fallbackEl.focus && fallbackEl.focus(); if (fallbackEl.select) fallbackEl.select(); else { const r = document.createRange(); r.selectNodeContents(fallbackEl); const s = getSelection(); s.removeAllRanges(); s.addRange(r); } } toast("เลือกข้อความแล้ว กดคัดลอกจากเมนูของเครื่อง"); };
+  try { navigator.clipboard.writeText(text).then(() => toast("คัดลอกแล้ว"), fb); } catch (e) { fb(); }
+}
+$("#btn-sum").onclick = () => { $("#sum-text").value = summaryText(); $("#sdlg").showModal(); };
+$("#sum-close").onclick = () => $("#sdlg").close();
+$("#sum-copy").onclick = () => copyText($("#sum-text").value, $("#sum-text"));
+$("#btn-share").onclick = () => {
+  const url = boardLink(boardKey);
+  $("#share-url").textContent = url;
+  const q = $("#qr"); q.innerHTML = "";
+  if (window.QRCode) { try { new QRCode(q, { text: url, width: 180, height: 180, colorDark: "#10232b", colorLight: "#ffffff" }); } catch (e) { q.hidden = true; } } else q.hidden = true;
+  $("#shdlg").showModal();
+};
+$("#share-close").onclick = () => $("#shdlg").close();
+$("#share-copy").onclick = () => copyText(boardLink(boardKey), $("#share-url"));
+
+/* ---------- editor ---------- */
+const form = $("#pform");
+function csRow(c) {
+  c = c || { id: uid(), dept: "", reason: "", status: "todo", urgent: false, note: "" };
+  return `<div class="csr" data-cid="${esc(c.id)}">
+    <input list="depts" class="dept-in" id="csd-${esc(c.id)}" placeholder="แผนก" value="${esc(c.dept)}" aria-label="แผนก">
+    <input class="reason" id="csr-${esc(c.id)}" placeholder="เหตุผลที่ consult" value="${esc(c.reason)}" aria-label="เหตุผล">
+    <select id="css-${esc(c.id)}" aria-label="สถานะ">${Object.entries(CS).map(([k, v]) => `<option value="${k}" ${k === c.status ? "selected" : ""}>${esc(v.label)}</option>`).join("")}</select>
+    <label class="urg"><input type="checkbox" id="csu-${esc(c.id)}" ${c.urgent ? "checked" : ""}> STAT</label>
+    <button type="button" class="x" data-rm aria-label="ลบ consult นี้">×</button>
+    <input class="note" id="csn-${esc(c.id)}" placeholder="คำแนะนำ / plan จากแผนก (ถ้ามี)" value="${esc(c.note)}" aria-label="หมายเหตุ">
+  </div>`;
+}
+let editing = null;
+function openEditor(p) {
+  editing = p ? p.id : null;
+  const d = p || { dc: "active", wardwork: [], problems: [], consults: [], labs: [], vitals: {} };
+  const v = d.vitals || {};
+  const wwText = (d.wardwork || []).map((w) => (w.done ? "✓ " : "") + w.t).join("\n");
+  const vin = (k, lab, ph, mode) => `<div class="fld"><label for="v-${k}">${lab}</label><input id="v-${k}" ${mode ? `inputmode="${mode}"` : ""} value="${esc(v[k])}" placeholder="${ph}"></div>`;
+  form.innerHTML = `
+    <div class="dlg-h"><h2>${p ? "เตียง " + esc(p.bed) : "เพิ่มผู้ป่วย"}</h2><button type="button" class="x" data-close aria-label="ปิด">×</button></div>
+    <div class="dlg-b">
+      <div class="fld s1"><label for="f-bed">เตียง</label><input id="f-bed" required value="${esc(d.bed)}" placeholder="12"></div>
+      <div class="fld s3"><label for="f-name">ชื่อย่อ</label><input id="f-name" value="${esc(d.name)}" placeholder="นาย ก."></div>
+      <div class="fld s1"><label for="f-age">อายุ</label><input id="f-age" inputmode="numeric" value="${esc(d.age)}"></div>
+      <div class="fld s1"><label for="f-sex">เพศ</label><select id="f-sex"><option value=""></option>${["M", "F"].map((s) => `<option ${d.sex === s ? "selected" : ""}>${s}</option>`).join("")}</select></div>
+      <div class="fld s2"><label for="f-admit">วันที่ admit</label><input id="f-admit" type="date" value="${esc(d.admit)}"></div>
+      <div class="fld" style="grid-column:span 4"><label for="f-dx">Diagnosis</label><input id="f-dx" value="${esc(d.dx)}" placeholder="เช่น Community-acquired pneumonia"></div>
+      <div class="fld"><span class="lab">Vital signs ล่าสุด</span></div>
+      <div class="vgrid">
+        ${vin("t", "T (°C)", "37.0", "decimal")}${vin("bp", "BP", "120/80")}${vin("hr", "HR", "80", "numeric")}${vin("rr", "RR", "20", "numeric")}
+        ${vin("spo2", "SpO₂ (%)", "98", "numeric")}${vin("o2", "O₂", "RA / NC 3 L")}${vin("dtx", "DTX", "120", "numeric")}${vin("time", "เวลาที่วัด", "06:00")}
+      </div>
+      <div class="fld s3"><label for="f-labs">Lab สำคัญ</label><textarea id="f-labs" placeholder="Hb 9.8&#10;!K 3.1&#10;Cr 1.6 (2.1)">${esc((d.labs || []).join("\n"))}</textarea><span class="hint">1 บรรทัดต่อ 1 ค่า · ขึ้นต้นด้วย ! = ผิดปกติ (ขึ้นสีแดง)</span></div>
+      <div class="fld s3"><label for="f-prob">Active problems</label><textarea id="f-prob" placeholder="1 บรรทัด = 1 problem">${esc((d.problems || []).join("\n"))}</textarea><span class="hint">1 บรรทัดต่อ 1 problem ระบบจะใส่ #1 #2 ให้</span></div>
+      <div class="fld"><label for="f-ww">Ward work</label><textarea id="f-ww" placeholder="CBC, BUN/Cr พรุ่งนี้เช้า&#10;F/U H/C">${esc(wwText)}</textarea><span class="hint">1 บรรทัด = 1 งาน · ขึ้นต้นด้วย ✓ = ทำแล้ว</span></div>
+      <div class="fld s2"><label for="f-dc">สถานะ Discharge</label><select id="f-dc">${Object.entries(DC).map(([k, x]) => `<option value="${k}" ${k === (d.dc || "active") ? "selected" : ""}>${esc(x.label)}</option>`).join("")}</select></div>
+      <div class="fld s1"><label for="f-dcdate">คาด D/C</label><input id="f-dcdate" type="date" value="${esc(d.dcDate)}"></div>
+      <div class="fld s3"><label for="f-dcnote">D/C plan / สิ่งที่รอ</label><input id="f-dcnote" value="${esc(d.dcNote)}" placeholder="รอญาติ, ยากลับบ้าน, นัด F/U"></div>
+      <div class="fld"><span class="lab">Consult</span><div id="cs-list">${(d.consults || []).map(csRow).join("")}</div><div><button type="button" class="btn" id="cs-add">+ เพิ่ม consult</button></div></div>
+    </div>
+    <div class="dlg-f">${p ? `<button type="button" class="btn danger" id="del">ลบเตียงนี้</button>` : "<span></span>"}
+      <div class="r"><button type="button" class="btn" data-close>ยกเลิก</button><button type="submit" class="btn primary">บันทึก</button></div></div>`;
+  $("#dlg").showModal();
+  if (!p) $("#f-bed").focus();
+}
+form.addEventListener("click", (e) => {
+  if (e.target.closest("[data-close]")) { $("#dlg").close(); return; }
+  if (e.target.closest("[data-rm]")) { e.target.closest(".csr").remove(); return; }
+  if (e.target.id === "cs-add") { $("#cs-list").insertAdjacentHTML("beforeend", csRow()); $("#cs-list .csr:last-child .dept-in").focus(); return; }
+  if (e.target.id === "del") {
+    const b = e.target;
+    if (b.dataset.armed) { removePatient(editing); $("#dlg").close(); toast("ลบเตียงแล้ว"); }
+    else { b.dataset.armed = "1"; b.textContent = "กดอีกครั้งเพื่อยืนยันการลบ"; }
+  }
+});
+const lines = (id) => $(id).value.split("\n").map((l) => l.trim()).filter(Boolean);
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const v = (id) => $(id).value.trim();
+  if (!v("#f-bed")) { $("#f-bed").focus(); toast("ใส่เลขเตียงก่อนบันทึก"); return; }
+  const old = editing ? patients.get(editing) : null;
+  const oldWW = new Map(((old && old.wardwork) || []).map((w) => [w.t, w]));
+  const wardwork = lines("#f-ww").map((l) => {
+    const done = /^(✓|\[x\])\s*/i.test(l), t = l.replace(/^(✓|\[x\])\s*/i, "");
+    const prev = oldWW.get(t);
+    return { id: prev ? prev.id : uid(), t, done };
+  });
+  const consults = [...form.querySelectorAll(".csr")].map((r) => ({
+    id: r.dataset.cid, dept: r.querySelector(".dept-in").value.trim(), reason: r.querySelector(".reason").value.trim(),
+    status: r.querySelector("select").value, urgent: r.querySelector(".urg input").checked, note: r.querySelector(".note").value.trim(),
+  })).filter((c) => c.dept || c.reason);
+  const vitals = {};
+  ["t", "bp", "hr", "rr", "spo2", "o2", "dtx", "time"].forEach((k) => { const x = v("#v-" + k); if (x) vitals[k] = x; });
+  const data = {
+    bed: v("#f-bed"), name: v("#f-name"), age: v("#f-age"), sex: $("#f-sex").value, admit: $("#f-admit").value, dx: v("#f-dx"),
+    vitals, labs: lines("#f-labs"),
+    problems: lines("#f-prob").map((l) => l.replace(/^#?\d+[.)]?\s*/, "").trim()).filter(Boolean),
+    wardwork, dc: $("#f-dc").value, dcDate: $("#f-dcdate").value, dcNote: v("#f-dcnote"), consults,
+  };
+  if (old && old.example) data.example = true;
+  putPatient(editing || "p" + uid(), data);
+  $("#dlg").close();
+});
+
+/* ---------- summary text ---------- */
+function summaryText() {
+  const out = [`${wardName || "Ward"} — ราวน์ ${new Date().toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}`, ""];
+  list().filter((p) => p.dc !== "done").forEach((p) => {
+    out.push(`เตียง ${p.bed} | ${p.name || ""} ${p.age || ""}${p.sex || ""}${p.admit ? " | " + dayOf(p.admit) : ""}`.trim());
+    out.push(`Dx: ${p.dx || "-"}`);
+    const vv = p.vitals || {};
+    const vs = VS.filter((f) => vv[f.k]).map((f) => `${f.lab.replace("₂", "2")} ${vv[f.k]}${f.unit}`);
+    if (vs.length) out.push(`V/S${vv.time ? " (" + vv.time + ")" : ""}: ${vs.join(", ")}`);
+    if ((p.labs || []).length) out.push(`Lab: ${p.labs.map((l) => (l.startsWith("!") ? l.slice(1).trim() + "*" : l)).join(", ")}`);
+    (p.problems || []).forEach((x, i) => out.push(`  #${i + 1} ${x}`));
+    const ww = p.wardwork || [];
+    if (ww.length) { out.push("Ward work:"); ww.forEach((w) => out.push(`  [${w.done ? "x" : " "}] ${w.t}`)); }
+    out.push(`D/C: ${(DC[p.dc] || DC.active).label}${p.dcDate ? " (คาด " + thDate(p.dcDate + "T00:00") + ")" : ""}${p.dcNote ? " – " + p.dcNote : ""}`);
+    const cs = (p.consults || []).filter((c) => c.status !== "off");
+    if (cs.length) out.push("Consult: " + cs.map((c) => `${c.dept}${c.urgent ? " STAT" : ""} (${(CS[c.status] || CS.todo).label})`).join(", "));
+    out.push("");
+  });
+  return out.join("\n");
+}
+
+/* ---------- examples (fictional, marked) ---------- */
+function addExamples() {
+  const iso = (off) => { const d = new Date(); d.setDate(d.getDate() + off); return d.toISOString().slice(0, 10); };
+  const w = (t, done = false) => ({ id: uid(), t, done });
+  const c = (dept, reason, status, urgent = false, note = "") => ({ id: uid(), dept, reason, status, urgent, note });
+  const ex = [
+    { bed: "3", name: "ตัวอย่าง ก.", age: "72", sex: "M", admit: iso(-3), dx: "Community-acquired pneumonia (RLL) with sepsis",
+      vitals: { t: "37.9", bp: "112/68", hr: "96", rr: "22", spo2: "95", o2: "NC 3 L", dtx: "198", time: "06:00" },
+      labs: ["WBC 14,200", "!Cr 1.6 (2.1)", "Lactate 1.8", "H/C NG 48 hr"],
+      problems: ["Sepsis from CAP — ceftriaxone + azithromycin D3", "AKI improving", "DM type 2 — DTX 180–220"],
+      wardwork: [w("CBC, BUN/Cr, E'lyte พรุ่งนี้เช้า"), w("F/U H/C 2 specimens"), w("เปลี่ยนเป็นยากินถ้าไม่มีไข้ 48 ชม."), w("CXR follow-up", true)],
+      dc: "plan", dcDate: iso(2), dcNote: "รอ afebrile 48 ชม. + ญาติพร้อมรับ", consults: [c("ID", "ATB de-escalation", "seen", false, "แนะนำ step down เป็น amoxicillin/clavulanate"), c("Nutrition", "DM diet", "todo")] },
+    { bed: "7", name: "ตัวอย่าง ข.", age: "58", sex: "F", admit: iso(-1), dx: "Acute decompensated HF (HFrEF, EF 30%)",
+      vitals: { t: "36.8", bp: "138/84", hr: "112", rr: "24", spo2: "92", o2: "NC 3 L", time: "06:00" },
+      labs: ["!K 3.1", "Na 134", "NT-proBNP 8,400", "Cr 1.1"],
+      problems: ["Volume overload — furosemide IV", "Hypokalemia", "New AF — rate control"],
+      wardwork: [w("I/O + BW ทุกวัน"), w("KCl + recheck K 16:00"), w("Echo จองแล้ว พรุ่งนี้ 10:00")],
+      dc: "active", consults: [c("Cardio", "AF anticoagulation", "sent")] },
+    { bed: "12", name: "ตัวอย่าง ค.", age: "45", sex: "M", admit: iso(-2), dx: "UGIB s/p EGD — DU Forrest IIa",
+      vitals: { t: "36.6", bp: "118/72", hr: "78", rr: "18", spo2: "98", o2: "RA", time: "06:00" },
+      labs: ["Hct 30 → 31 → 31", "BUN 28"],
+      problems: ["Post-endoscopic hemostasis — PPI IV → oral"],
+      wardwork: [w("Hct q 12 ชม. × 2", true), w("เริ่ม soft diet"), w("ยากลับบ้าน + นัด OPD GI 2 สัปดาห์")],
+      dc: "ready", dcNote: "กินได้ ไม่มี melena", consults: [c("GI", "Post-EGD F/U", "off")] },
+    { bed: "15", name: "ตัวอย่าง ง.", age: "80", sex: "F", admit: iso(0), dx: "Acute ischemic stroke (L MCA)",
+      vitals: { t: "37.2", bp: "186/98", hr: "88", rr: "20", spo2: "96", o2: "RA", dtx: "142", time: "08:00" },
+      labs: ["CT brain: L MCA infarct, no bleed", "LDL 168", "HbA1c 6.1"],
+      problems: ["R hemiparesis, aphasia — NIHSS 12", "Aspiration risk — NPO, NG feeding", "HT — permissive BP < 220/120"],
+      wardwork: [w("Neuro sign q 2 ชม."), w("CT brain ซ้ำ 24 ชม."), w("Swallowing test")],
+      dc: "watch", consults: [c("Neuro", "Stroke management", "seen", true), c("Rehab", "PT/OT", "todo"), c("Social worker", "วางแผนดูแลที่บ้าน", "todo")] },
+  ];
+  ex.forEach((d) => putPatient("ex" + uid(), { ...d, example: true }));
+  toast("เพิ่มข้อมูลตัวอย่างแล้ว");
+}
+
+$("#today").textContent = new Date().toLocaleDateString("th-TH", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+route();
+})();
+</script>
+
+</body>
+</html>
