@@ -209,6 +209,28 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); }
 #qr { background: #ffffff; padding: 10px; border-radius: 8px; width: max-content; max-width: 100%; }
 #qr img, #qr canvas { display: block; max-width: 100%; height: auto; }
 .home { text-decoration: none; color: inherit; }
+/* ward work panel */
+.wwpanel { display: flex; flex-direction: column; gap: 10px; padding-bottom: 40px; }
+.wbed { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px 10px 18px; position: relative; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 2px 14px; }
+.wbed::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 0 3px 3px 0; background: var(--tone); }
+.wbed.alldone { opacity: .7; }
+.whead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.whead .dx { margin: 0; }
+.wprog { margin-left: auto; font-family: var(--f-mono); font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.wprog i { display: inline-block; width: 64px; height: 6px; border-radius: 3px; background: var(--done-soft); overflow: hidden; }
+.wprog i b { display: block; height: 100%; background: var(--ok); }
+.wtasks { list-style: none; margin: 6px 0 0; padding: 0; grid-column: 2; }
+.wtasks li { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); }
+.wtasks label { display: flex; gap: 10px; align-items: flex-start; flex: 1; min-width: 0; cursor: pointer; overflow-wrap: anywhere; }
+.wtasks input[type=checkbox] { width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--accent); flex: none; }
+.wtasks input:checked + span { text-decoration: line-through; color: var(--muted); }
+.wtasks .ww-add { margin-top: 6px; }
+.prio { font-family: var(--f-mono); font-size: 11px; line-height: 1.6; border-radius: 4px; padding: 0 6px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; flex: none; white-space: nowrap; }
+.prio.p0 { color: var(--crit); border-color: var(--crit); background: var(--crit-soft); font-weight: 600; }
+.prio.p1 { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+span.prio { cursor: default; margin-right: 4px; }
+.alldone-list { color: var(--muted); font-size: 13px; }
+@media (max-width: 560px) { .wbed { grid-template-columns: 1fr; } .wtasks { grid-column: 1; } .wprog { margin-left: 0; } }
 @media (max-width: 560px) { .vgrid { grid-template-columns: repeat(2, 1fr); } }
 </style>
 </head>
@@ -270,6 +292,7 @@ body { margin: 0; padding-top: env(safe-area-inset-top, 0px); }
   <div class="toolbar">
     <div class="tabs" role="tablist">
       <button role="tab" id="tab-pts" aria-selected="true">ผู้ป่วย</button>
+      <button role="tab" id="tab-ww" aria-selected="false">Ward work</button>
       <button role="tab" id="tab-cs" aria-selected="false">Consult panel</button>
     </div>
     <input id="q" type="search" placeholder="ค้นหาเตียง ชื่อย่อ Dx…" aria-label="ค้นหา">
@@ -326,6 +349,24 @@ const CS = {
   seen: { label: "ดูแล้ว / F/U", tone: "info" },
   off:  { label: "Sign off", tone: "done" },
 };
+const PR = {
+  stat:   { label: "STAT", rank: 0, cls: "p0" },
+  high:   { label: "สำคัญ", rank: 1, cls: "p1" },
+  normal: { label: "ปกติ", rank: 2, cls: "p2" },
+};
+const PR_NEXT = { normal: "high", high: "stat", stat: "normal" };
+const prioOf = (w) => (PR[w.p] ? w.p : "normal");
+const rankOf = (w) => PR[prioOf(w)].rank;
+const byPrio = (a, b) => (a.done - b.done) || (rankOf(a) - rankOf(b));
+/* "!! task" = STAT, "! task" = important */
+function parseTask(line) {
+  let t = line.trim(), done = false, p = "normal";
+  if (/^(✓|\[x\])\s*/i.test(t)) { done = true; t = t.replace(/^(✓|\[x\])\s*/i, ""); }
+  if (/^!!\s*/.test(t)) { p = "stat"; t = t.replace(/^!!\s*/, ""); }
+  else if (/^!\s*/.test(t)) { p = "high"; t = t.replace(/^!\s*/, ""); }
+  return { t, done, p };
+}
+const taskLine = (w) => (w.done ? "✓ " : "") + (w.p === "stat" ? "!! " : w.p === "high" ? "! " : "") + w.t;
 /* vital sign fields, with a simple adult abnormal flag */
 const VS = [
   { k: "t", lab: "T", unit: "°C", ab: (v) => v >= 37.8 || v < 36 },
@@ -361,7 +402,7 @@ async function rpc(fn, args) {
 
 let boardKey = "";
 let patients = new Map(), wardName = "", pending = 0, pollT = null, lastOk = 0;
-const ui = { tab: "pts", q: "", dc: "all", csActive: true, confirm: false };
+const ui = { tab: ls.get("wwf-tab", "pts"), q: "", dc: "all", csActive: true, wwHideDone: false, confirm: false };
 const myName = () => ($("#me-name").value.trim() || "ไม่ระบุชื่อ");
 
 function keyFromHash() { const h = location.hash.replace(/^#/, ""); return /^[a-f0-9]{32}$/.test(h) ? h : ""; }
@@ -475,6 +516,7 @@ function labsHTML(p) {
 function renderStrip() {
   const ps = list().filter((p) => p.dc !== "done");
   const ww = ps.reduce((n, p) => n + (p.wardwork || []).filter((w) => !w.done).length, 0);
+  const stat = ps.reduce((n, p) => n + (p.wardwork || []).filter((w) => !w.done && w.p === "stat").length, 0);
   const ready = ps.filter((p) => p.dc === "ready").length;
   const watch = ps.filter((p) => p.dc === "watch").length;
   const cs = ps.reduce((n, p) => n + (p.consults || []).filter((c) => c.status === "todo" || c.status === "sent").length, 0);
@@ -482,11 +524,13 @@ function renderStrip() {
     `<span class="stat"><b>${ps.length}</b> ผู้ป่วยในวอร์ด</span>` +
     `<span class="stat ${watch ? "crit" : ""}"><b>${watch}</b> Unstable</span>` +
     `<span class="stat ${ww ? "warn" : ""}"><b>${ww}</b> ward work ค้าง</span>` +
+    `<span class="stat ${stat ? "crit" : ""}"><b>${stat}</b> งาน STAT</span>` +
     `<span class="stat ${ready ? "ok" : ""}"><b>${ready}</b> พร้อม D/C</span>` +
     `<span class="stat ${cs ? "warn" : ""}"><b>${cs}</b> consult รอ</span>`;
 }
 function renderFilters() {
   const el = $("#filters");
+  if (ui.tab === "ww") { el.innerHTML = `<button class="fchip" data-wwhide="1" aria-pressed="${ui.wwHideDone}">ซ่อนงานที่เสร็จแล้ว</button>`; return; }
   if (ui.tab === "cs") { el.innerHTML = `<button class="fchip" data-csact="1" aria-pressed="${ui.csActive}">เฉพาะที่ยังไม่ sign off</button>`; return; }
   const opts = [["all", "ทั้งหมด"], ...Object.entries(DC).map(([k, v]) => [k, v.short])];
   el.innerHTML = opts.map(([k, l]) => `<button class="fchip" data-dcf="${k}" aria-pressed="${ui.dc === k}">${esc(l)}</button>`).join("");
@@ -501,7 +545,7 @@ function rowHTML(p) {
   const dcKey = DC[p.dc] ? p.dc : "active", dc = DC[dcKey];
   const ww = p.wardwork || [], left = ww.filter((w) => !w.done).length;
   const probs = (p.problems || []).length ? `<ol class="prob">${p.problems.map((x) => `<li><span>${esc(x)}</span></li>`).join("")}</ol>` : `<span class="meta">—</span>`;
-  const wwl = ww.map((w) => `<li><label><input type="checkbox" id="ww-${p.id}-${w.id}" data-act="ww" data-w="${w.id}" ${w.done ? "checked" : ""}><span>${esc(w.t)}</span></label></li>`).join("");
+  const wwl = [...ww].sort(byPrio).map((w) => `<li><label><input type="checkbox" id="ww-${p.id}-${w.id}" data-act="ww" data-w="${w.id}" ${w.done ? "checked" : ""}><span>${prioOf(w) !== "normal" ? `<span class="prio ${PR[prioOf(w)].cls}">${PR[prioOf(w)].label}</span>` : ""}${esc(w.t)}</span></label></li>`).join("");
   const cs = (p.consults || []).map((c) => { const s = CS[c.status] || CS.todo; return `<span class="chip tone-${s.tone}" title="${esc(c.reason || "")}"><span class="d">${esc(c.dept)}</span>${esc(s.label)}${c.urgent ? ' <span class="stat-chip">STAT</span>' : ""}</span>`; }).join("");
   const age = [p.age ? p.age + " ปี" : "", p.sex || ""].filter(Boolean).join(" ");
   const adm = p.admit ? `Adm ${thDate(p.admit + "T00:00")} · ${dayOf(p.admit)}` : "";
@@ -512,7 +556,7 @@ function rowHTML(p) {
     <div class="c-pt"><div class="pt-name">${esc(p.name || "ไม่ระบุ")} <span class="meta">${esc(age)}</span></div><div class="dx">${esc(p.dx || "ยังไม่ใส่ Dx")}</div><div class="meta">${adm}</div></div>
     <div class="c-vl"><span class="lbl">Vital signs / Lab</span>${vl || '<span class="meta">—</span>'}</div>
     <div class="c-prob"><span class="lbl">Active problems</span>${probs}</div>
-    <div class="c-ww"><span class="lbl">Ward work <b>${left}</b>/${ww.length} ค้าง</span><ul class="ww">${wwl}</ul><input class="ww-add" id="add-${p.id}" data-act="ww-add" placeholder="+ เพิ่ม ward work แล้วกด Enter" aria-label="เพิ่ม ward work เตียง ${esc(p.bed)}"></div>
+    <div class="c-ww"><span class="lbl">Ward work <b>${left}</b>/${ww.length} ค้าง</span><ul class="ww">${wwl}</ul><input class="ww-add" id="add-${p.id}" data-act="ww-add" placeholder="+ เพิ่ม ward work (!! = STAT) แล้วกด Enter" aria-label="เพิ่ม ward work เตียง ${esc(p.bed)}"></div>
     <div class="c-dc"><span class="lbl">Discharge</span><select class="dcsel" id="dc-${p.id}" data-act="dc" aria-label="สถานะ D/C เตียง ${esc(p.bed)}">${Object.entries(DC).map(([k, v]) => `<option value="${k}" ${k === dcKey ? "selected" : ""}>${esc(v.label)}</option>`).join("")}</select>${dcMeta ? `<div class="meta" style="margin-top:4px">${dcMeta}</div>` : ""}</div>
     <div class="c-cs"><span class="lbl">Consult</span><div class="chips">${cs || '<span class="meta">—</span>'}</div></div>
     <div class="c-ed"><button class="btn" data-act="edit" aria-label="แก้ไขเตียง ${esc(p.bed)}">แก้ไข</button><div class="upd">${updatedLine(p)}</div></div>
@@ -530,6 +574,36 @@ function renderPatients() {
   const head = `<div class="grid-cols colhead"><span>เตียง</span><span>ผู้ป่วย / Diagnosis</span><span>Vitals / Lab</span><span>Active problems</span><span>Ward work</span><span>Discharge</span><span>Consult</span><span></span></div>`;
   const exBar = list().some((p) => p.example) ? `<div class="confirm" style="border-color:var(--line);background:var(--surface)"><p>บอร์ดนี้มีข้อมูลตัวอย่าง (ป้าย “ตัวอย่าง”) ลบออกก่อนใช้งานจริง</p><button class="btn" data-act="clear-ex">ลบข้อมูลตัวอย่าง</button></div>` : "";
   return exBar + head + `<div class="board">${ps.map(rowHTML).join("") || '<p class="meta">ไม่พบผู้ป่วยที่ตรงกับตัวกรอง</p>'}</div>`;
+}
+function renderWardwork() {
+  if (!patients.size) return emptyHTML();
+  const q = ui.q.toLowerCase();
+  const beds = list().filter((p) => p.dc !== "done")
+    .filter((p) => !q || [p.bed, p.name, p.dx, ...(p.wardwork || []).map((w) => w.t)].join(" ").toLowerCase().includes(q))
+    .map((p) => {
+      const tasks = [...(p.wardwork || [])].sort(byPrio);
+      const pend = tasks.filter((w) => !w.done);
+      return { p, tasks, pend, top: pend.length ? Math.min(...pend.map(rankOf)) : 9 };
+    })
+    .sort((a, b) => a.top - b.top || (b.p.dc === "watch") - (a.p.dc === "watch") || b.pend.length - a.pend.length || natural(a.p, b.p));
+  const shown = ui.wwHideDone ? beds.filter((b) => b.pend.length) : beds;
+  const finished = ui.wwHideDone ? beds.filter((b) => !b.pend.length) : [];
+  if (!shown.length && !finished.length) return `<p class="meta">ไม่พบเตียงที่ตรงกับคำค้นหา</p>`;
+  return `<div class="wwpanel">${shown.map(({ p, tasks, pend }) => {
+    const dc = DC[p.dc] || DC.active, n = tasks.length, d = n - pend.length;
+    const items = (ui.wwHideDone ? pend : tasks).map((w) => {
+      const pr = PR[prioOf(w)];
+      return `<li><label><input type="checkbox" id="wwp-${p.id}-${w.id}" data-act="ww" data-w="${w.id}" ${w.done ? "checked" : ""}><span>${esc(w.t)}</span></label>
+        <button type="button" class="prio ${pr.cls}" data-act="prio" data-w="${w.id}" title="กดเพื่อเปลี่ยนความสำคัญ" aria-label="ความสำคัญ ${pr.label} กดเพื่อเปลี่ยน">${pr.label}</button></li>`;
+    }).join("");
+    return `<article class="wbed tone-${dc.tone} ${n && !pend.length ? "alldone" : ""}" data-id="${p.id}">
+      <span class="bed">${esc(p.bed || "—")}</span>
+      <div class="whead"><b>${esc(p.name || "")}</b><span class="dx">${esc(p.dx || "")}</span>
+        <span class="wprog">${d}/${n} เสร็จ <i><b style="width:${n ? Math.round((d / n) * 100) : 0}%"></b></i></span></div>
+      <ul class="wtasks">${items || '<li class="meta">ยังไม่มีงาน</li>'}
+        <li style="border:0;padding:0"><input class="ww-add" id="addp-${p.id}" data-act="ww-add" placeholder="+ เพิ่มงาน (!! = STAT, ! = สำคัญ) แล้วกด Enter" aria-label="เพิ่มงานเตียง ${esc(p.bed)}"></li></ul>
+    </article>`;
+  }).join("")}${finished.length ? `<p class="alldone-list">งานเสร็จครบแล้ว: เตียง ${finished.map((b) => esc(b.p.bed)).join(", ")}</p>` : ""}</div>`;
 }
 function renderConsults() {
   const groups = new Map();
@@ -560,9 +634,10 @@ function render() {
   const ae = document.activeElement, aid = ae && ae.id, aval = ae && ae.value, sel = ae && ae.selectionStart;
   renderStrip(); renderFilters(); renderConfirm();
   $("#tab-pts").setAttribute("aria-selected", ui.tab === "pts");
+  $("#tab-ww").setAttribute("aria-selected", ui.tab === "ww");
   $("#tab-cs").setAttribute("aria-selected", ui.tab === "cs");
-  $("#view").innerHTML = ui.tab === "pts" ? renderPatients() : renderConsults();
-  if (aid && aid.startsWith("add-")) { const el = document.getElementById(aid); if (el) { el.value = aval; el.focus(); try { el.setSelectionRange(sel, sel); } catch (e) {} } }
+  $("#view").innerHTML = ui.tab === "pts" ? renderPatients() : ui.tab === "ww" ? renderWardwork() : renderConsults();
+  if (aid && aid.startsWith("add")) { const el = document.getElementById(aid); if (el) { el.value = aval; el.focus(); try { el.setSelectionRange(sel, sel); } catch (e) {} } }
 }
 
 /* ---------- events ---------- */
@@ -581,11 +656,17 @@ view.addEventListener("keydown", (e) => {
   const txt = t.value.trim(); if (!txt) return;
   const p = patients.get(t.closest("[data-id]").dataset.id); if (!p) return;
   t.value = "";
-  patchPatient(p.id, { wardwork: [...clone(p.wardwork || []), { id: uid(), t: txt, done: false }] });
+  const pt = parseTask(txt); if (!pt.t) return;
+  patchPatient(p.id, { wardwork: [...clone(p.wardwork || []), { id: uid(), t: pt.t, done: false, p: pt.p }] });
 });
 view.addEventListener("click", (e) => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act;
+  if (act === "prio") {
+    const p = patients.get(b.closest("[data-id]").dataset.id); if (!p) return;
+    patchPatient(p.id, { wardwork: clone(p.wardwork || []).map((w) => (w.id === b.dataset.w ? { ...w, p: PR_NEXT[prioOf(w)] } : w)) });
+    return;
+  }
   if (act === "edit") openEditor(patients.get(b.closest("[data-id]").dataset.id));
   else if (act === "first-add") openEditor(null);
   else if (act === "examples") addExamples();
@@ -607,10 +688,13 @@ $("#filters").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   if (b.dataset.dcf) ui.dc = b.dataset.dcf;
   if (b.dataset.csact) ui.csActive = !ui.csActive;
+  if (b.dataset.wwhide) ui.wwHideDone = !ui.wwHideDone;
   render();
 });
-$("#tab-pts").onclick = () => { ui.tab = "pts"; render(); };
-$("#tab-cs").onclick = () => { ui.tab = "cs"; render(); };
+const setTab = (t) => { ui.tab = t; ls.set("wwf-tab", t); render(); };
+$("#tab-pts").onclick = () => setTab("pts");
+$("#tab-ww").onclick = () => setTab("ww");
+$("#tab-cs").onclick = () => setTab("cs");
 $("#q").addEventListener("input", (e) => { ui.q = e.target.value.trim(); render(); });
 $("#btn-add").onclick = () => openEditor(null);
 $("#btn-new").onclick = () => { ui.confirm = true; renderConfirm(); };
@@ -656,7 +740,7 @@ function openEditor(p) {
   editing = p ? p.id : null;
   const d = p || { dc: "active", wardwork: [], problems: [], consults: [], labs: [], vitals: {} };
   const v = d.vitals || {};
-  const wwText = (d.wardwork || []).map((w) => (w.done ? "✓ " : "") + w.t).join("\n");
+  const wwText = [...(d.wardwork || [])].sort(byPrio).map(taskLine).join("\n");
   const vin = (k, lab, ph, mode) => `<div class="fld"><label for="v-${k}">${lab}</label><input id="v-${k}" ${mode ? `inputmode="${mode}"` : ""} value="${esc(v[k])}" placeholder="${ph}"></div>`;
   form.innerHTML = `
     <div class="dlg-h"><h2>${p ? "เตียง " + esc(p.bed) : "เพิ่มผู้ป่วย"}</h2><button type="button" class="x" data-close aria-label="ปิด">×</button></div>
@@ -674,7 +758,7 @@ function openEditor(p) {
       </div>
       <div class="fld s3"><label for="f-labs">Lab สำคัญ</label><textarea id="f-labs" placeholder="Hb 9.8&#10;!K 3.1&#10;Cr 1.6 (2.1)">${esc((d.labs || []).join("\n"))}</textarea><span class="hint">1 บรรทัดต่อ 1 ค่า · ขึ้นต้นด้วย ! = ผิดปกติ (ขึ้นสีแดง)</span></div>
       <div class="fld s3"><label for="f-prob">Active problems</label><textarea id="f-prob" placeholder="1 บรรทัด = 1 problem">${esc((d.problems || []).join("\n"))}</textarea><span class="hint">1 บรรทัดต่อ 1 problem ระบบจะใส่ #1 #2 ให้</span></div>
-      <div class="fld"><label for="f-ww">Ward work</label><textarea id="f-ww" placeholder="CBC, BUN/Cr พรุ่งนี้เช้า&#10;F/U H/C">${esc(wwText)}</textarea><span class="hint">1 บรรทัด = 1 งาน · ขึ้นต้นด้วย ✓ = ทำแล้ว</span></div>
+      <div class="fld"><label for="f-ww">Ward work</label><textarea id="f-ww" placeholder="CBC, BUN/Cr พรุ่งนี้เช้า&#10;F/U H/C">${esc(wwText)}</textarea><span class="hint">1 บรรทัด = 1 งาน · ขึ้นต้นด้วย !! = STAT, ! = สำคัญ, ✓ = ทำแล้ว (เช่น ✓ !! Hct 18:00)</span></div>
       <div class="fld s2"><label for="f-dc">สถานะ Discharge</label><select id="f-dc">${Object.entries(DC).map(([k, x]) => `<option value="${k}" ${k === (d.dc || "active") ? "selected" : ""}>${esc(x.label)}</option>`).join("")}</select></div>
       <div class="fld s1"><label for="f-dcdate">คาด D/C</label><input id="f-dcdate" type="date" value="${esc(d.dcDate)}"></div>
       <div class="fld s3"><label for="f-dcnote">D/C plan / สิ่งที่รอ</label><input id="f-dcnote" value="${esc(d.dcNote)}" placeholder="รอญาติ, ยากลับบ้าน, นัด F/U"></div>
@@ -702,10 +786,9 @@ form.addEventListener("submit", (e) => {
   if (!v("#f-bed")) { $("#f-bed").focus(); toast("ใส่เลขเตียงก่อนบันทึก"); return; }
   const old = editing ? patients.get(editing) : null;
   const oldWW = new Map(((old && old.wardwork) || []).map((w) => [w.t, w]));
-  const wardwork = lines("#f-ww").map((l) => {
-    const done = /^(✓|\[x\])\s*/i.test(l), t = l.replace(/^(✓|\[x\])\s*/i, "");
+  const wardwork = lines("#f-ww").map(parseTask).filter((x) => x.t).map(({ t, done, p }) => {
     const prev = oldWW.get(t);
-    return { id: prev ? prev.id : uid(), t, done };
+    return { id: prev ? prev.id : uid(), t, done, p };
   });
   const consults = [...form.querySelectorAll(".csr")].map((r) => ({
     id: r.dataset.cid, dept: r.querySelector(".dept-in").value.trim(), reason: r.querySelector(".reason").value.trim(),
@@ -736,7 +819,7 @@ function summaryText() {
     if ((p.labs || []).length) out.push(`Lab: ${p.labs.map((l) => (l.startsWith("!") ? l.slice(1).trim() + "*" : l)).join(", ")}`);
     (p.problems || []).forEach((x, i) => out.push(`  #${i + 1} ${x}`));
     const ww = p.wardwork || [];
-    if (ww.length) { out.push("Ward work:"); ww.forEach((w) => out.push(`  [${w.done ? "x" : " "}] ${w.t}`)); }
+    if (ww.length) { out.push("Ward work:"); [...ww].sort(byPrio).forEach((w) => out.push(`  [${w.done ? "x" : " "}] ${w.p === "stat" ? "STAT " : w.p === "high" ? "(สำคัญ) " : ""}${w.t}`)); }
     out.push(`D/C: ${(DC[p.dc] || DC.active).label}${p.dcDate ? " (คาด " + thDate(p.dcDate + "T00:00") + ")" : ""}${p.dcNote ? " – " + p.dcNote : ""}`);
     const cs = (p.consults || []).filter((c) => c.status !== "off");
     if (cs.length) out.push("Consult: " + cs.map((c) => `${c.dept}${c.urgent ? " STAT" : ""} (${(CS[c.status] || CS.todo).label})`).join(", "));
@@ -748,32 +831,32 @@ function summaryText() {
 /* ---------- examples (fictional, marked) ---------- */
 function addExamples() {
   const iso = (off) => { const d = new Date(); d.setDate(d.getDate() + off); return d.toISOString().slice(0, 10); };
-  const w = (t, done = false) => ({ id: uid(), t, done });
+  const w = (t, done = false, p = "normal") => ({ id: uid(), t, done, p });
   const c = (dept, reason, status, urgent = false, note = "") => ({ id: uid(), dept, reason, status, urgent, note });
   const ex = [
     { bed: "3", name: "ตัวอย่าง ก.", age: "72", sex: "M", admit: iso(-3), dx: "Community-acquired pneumonia (RLL) with sepsis",
       vitals: { t: "37.9", bp: "112/68", hr: "96", rr: "22", spo2: "95", o2: "NC 3 L", dtx: "198", time: "06:00" },
       labs: ["WBC 14,200", "!Cr 1.6 (2.1)", "Lactate 1.8", "H/C NG 48 hr"],
       problems: ["Sepsis from CAP — ceftriaxone + azithromycin D3", "AKI improving", "DM type 2 — DTX 180–220"],
-      wardwork: [w("CBC, BUN/Cr, E'lyte พรุ่งนี้เช้า"), w("F/U H/C 2 specimens"), w("เปลี่ยนเป็นยากินถ้าไม่มีไข้ 48 ชม."), w("CXR follow-up", true)],
+      wardwork: [w("CBC, BUN/Cr, E'lyte พรุ่งนี้เช้า"), w("F/U H/C 2 specimens", false, "high"), w("เปลี่ยนเป็นยากินถ้าไม่มีไข้ 48 ชม."), w("CXR follow-up", true)],
       dc: "plan", dcDate: iso(2), dcNote: "รอ afebrile 48 ชม. + ญาติพร้อมรับ", consults: [c("ID", "ATB de-escalation", "seen", false, "แนะนำ step down เป็น amoxicillin/clavulanate"), c("Nutrition", "DM diet", "todo")] },
     { bed: "7", name: "ตัวอย่าง ข.", age: "58", sex: "F", admit: iso(-1), dx: "Acute decompensated HF (HFrEF, EF 30%)",
       vitals: { t: "36.8", bp: "138/84", hr: "112", rr: "24", spo2: "92", o2: "NC 3 L", time: "06:00" },
       labs: ["!K 3.1", "Na 134", "NT-proBNP 8,400", "Cr 1.1"],
       problems: ["Volume overload — furosemide IV", "Hypokalemia", "New AF — rate control"],
-      wardwork: [w("I/O + BW ทุกวัน"), w("KCl + recheck K 16:00"), w("Echo จองแล้ว พรุ่งนี้ 10:00")],
+      wardwork: [w("I/O + BW ทุกวัน"), w("KCl + recheck K 16:00", false, "stat"), w("Echo จองแล้ว พรุ่งนี้ 10:00")],
       dc: "active", consults: [c("Cardio", "AF anticoagulation", "sent")] },
     { bed: "12", name: "ตัวอย่าง ค.", age: "45", sex: "M", admit: iso(-2), dx: "UGIB s/p EGD — DU Forrest IIa",
       vitals: { t: "36.6", bp: "118/72", hr: "78", rr: "18", spo2: "98", o2: "RA", time: "06:00" },
       labs: ["Hct 30 → 31 → 31", "BUN 28"],
       problems: ["Post-endoscopic hemostasis — PPI IV → oral"],
-      wardwork: [w("Hct q 12 ชม. × 2", true), w("เริ่ม soft diet"), w("ยากลับบ้าน + นัด OPD GI 2 สัปดาห์")],
+      wardwork: [w("Hct q 12 ชม. × 2", true), w("เริ่ม soft diet"), w("ยากลับบ้าน + นัด OPD GI 2 สัปดาห์", false, "high")],
       dc: "ready", dcNote: "กินได้ ไม่มี melena", consults: [c("GI", "Post-EGD F/U", "off")] },
     { bed: "15", name: "ตัวอย่าง ง.", age: "80", sex: "F", admit: iso(0), dx: "Acute ischemic stroke (L MCA)",
       vitals: { t: "37.2", bp: "186/98", hr: "88", rr: "20", spo2: "96", o2: "RA", dtx: "142", time: "08:00" },
       labs: ["CT brain: L MCA infarct, no bleed", "LDL 168", "HbA1c 6.1"],
       problems: ["R hemiparesis, aphasia — NIHSS 12", "Aspiration risk — NPO, NG feeding", "HT — permissive BP < 220/120"],
-      wardwork: [w("Neuro sign q 2 ชม."), w("CT brain ซ้ำ 24 ชม."), w("Swallowing test")],
+      wardwork: [w("Neuro sign q 2 ชม.", false, "stat"), w("CT brain ซ้ำ 24 ชม."), w("Swallowing test")],
       dc: "watch", consults: [c("Neuro", "Stroke management", "seen", true), c("Rehab", "PT/OT", "todo"), c("Social worker", "วางแผนดูแลที่บ้าน", "todo")] },
   ];
   ex.forEach((d) => putPatient("ex" + uid(), { ...d, example: true }));
